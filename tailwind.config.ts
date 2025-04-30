@@ -1,3 +1,4 @@
+
 import type { Config } from "tailwindcss";
 
 export default {
@@ -61,6 +62,13 @@ export default {
 					'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
 					border: 'hsl(var(--sidebar-border))',
 					ring: 'hsl(var(--sidebar-ring))'
+				},
+				quest: {
+					'royal-purple': '#472b75',
+					'gold': '#e9c46a',
+					'parchment': '#f5f0e1',
+					'dark-blue': '#1A1F2C',
+					'light-purple': '#9b87f5',
 				}
 			},
 			borderRadius: {
@@ -89,7 +97,10 @@ export default {
 			animation: {
 				'accordion-down': 'accordion-down 0.2s ease-out',
 				'accordion-up': 'accordion-up 0.2s ease-out'
-			}
+			},
+			backgroundImage: {
+				'parchment-texture': "url('/lovable-uploads/1ad51346-b541-4abf-a578-4f27e9c26b83.png')",
+			},
 		}
 	},
 	plugins: [require("tailwindcss-animate")],
