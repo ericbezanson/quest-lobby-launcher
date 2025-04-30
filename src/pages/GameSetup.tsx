@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import Layout from "@/components/Layout";
@@ -10,6 +9,7 @@ import { ArrowLeft, Users, Circle, RefreshCw } from "lucide-react";
 import PlayersList from "@/components/PlayersList";
 import OptionalRolesList from "@/components/OptionalRolesList";
 import GameCards from "@/components/GameCards";
+import EyesClosedInstructions from "@/components/EyesClosedInstructions";
 
 const GameSetup = () => {
   const { lobbyId } = useParams<{ lobbyId: string }>();
@@ -119,6 +119,8 @@ const GameSetup = () => {
           
           <div className="grid grid-cols-1 gap-6">
             <GameCards lobbyId={lobbyId || ""} />
+            
+            <EyesClosedInstructions lobbyId={lobbyId || ""} />
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <PlayersList 
