@@ -14,13 +14,16 @@ import { LobbyProvider } from "./contexts/LobbyContext";
 
 const queryClient = new QueryClient();
 
+// Get the base URL from the environment or default to '/'
+const basename = import.meta.env.BASE_URL;
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <LobbyProvider>
         <Toaster />
         <Sonner />
-        <BrowserRouter>
+        <BrowserRouter basename={basename}>
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/create-lobby" element={<CreateLobby />} />
