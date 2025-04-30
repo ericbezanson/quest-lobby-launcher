@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { toast } from "sonner";
 
@@ -39,6 +38,8 @@ interface LobbyContextType {
   startGame: (lobbyId: string) => void;
   resetGame: (lobbyId: string) => void;
   refreshLobby: (lobbyId: string) => void;
+  addPlayerLocally: (lobbyId: string, playerName: string) => void;
+  removePlayerLocally: (lobbyId: string, playerId: string) => void;
 }
 
 const LobbyContext = createContext<LobbyContextType | undefined>(undefined);
@@ -302,7 +303,7 @@ export const LobbyProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
     
     // Check if the name is already taken in this lobby
-    if (lobby.players.some(player => player.name === playerName)) {
+    if (lobby.players.some(player => player.name.toLowerCase() === playerName.toLowerCase())) {
       toast.error("Name already taken in this lobby!");
       return false;
     }
@@ -528,6 +529,98 @@ export const LobbyProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     toast.info("Game reset. Ready to start a new game.");
   };
 
+  // New function to add a player locally to a lobby
+  const addPlayerLocally = (lobbyId: string, playerName: string): void => {
+    const lobbyIndex = lobbies.findIndex(lobby => lobby.id === lobbyId);
+    
+    if (lobbyIndex === -1) {
+      toast.error("Lobby not found!");
+      return;
+    }
+    
+    const lobby = lobbies[lobbyIndex];
+    
+    // Check if the name is already taken in this lobby
+    if (lobby.players.some(player => player.name.toLowerCase() === playerName.toLowerCase())) {
+      toast.error("Name already taken in this lobby!");
+      return;
+    }
+    
+    // Create a new player (not a host)
+    const newPlayer: Player = {
+      id: generateId(),
+      name: playerName,
+      isHost: false
+    };
+    
+    // Add the player to the lobby and update timestamp
+    const updatedLobby = {
+      ...lobby,
+      players: [...lobby.players, newPlayer],
+      lastUpdated: Date.now()
+    };
+    
+    // Update the lobbies state
+    const updatedLobbies = [...lobbies];
+    updatedLobbies[lobbyIndex] = updatedLobby;
+    
+    setLobbies(updatedLobbies);
+    
+    if (lobbyId === currentLobby?.id) {
+      setCurrentLobby(updatedLobby);
+    }
+    
+    toast.success(`Added player "${playerName}" to the lobby`);
+  };
+
+  // New function to remove a player locally from a lobby
+  const removePlayerLocally = (lobbyId: string, playerId: string): void => {
+    const lobbyIndex = lobbies.findIndex(lobby => lobby.id === lobbyId);
+    
+    if (lobbyIndex === -1) {
+      toast.error("Lobby not found!");
+      return;
+    }
+    
+    const lobby = lobbies[lobbyIndex];
+    const playerIndex = lobby.players.findIndex(player => player.id === playerId);
+    
+    if (playerIndex === -1) {
+      toast.error("Player not found!");
+      return;
+    }
+    
+    const player = lobby.players[playerIndex];
+    
+    // Don't allow removing the host
+    if (player.isHost) {
+      toast.error("Cannot remove the host player!");
+      return;
+    }
+    
+    // Update the players array and lobby
+    const updatedPlayers = [...lobby.players];
+    updatedPlayers.splice(playerIndex, 1);
+    
+    const updatedLobby = {
+      ...lobby,
+      players: updatedPlayers,
+      lastUpdated: Date.now()
+    };
+    
+    // Update the lobbies state
+    const updatedLobbies = [...lobbies];
+    updatedLobbies[lobbyIndex] = updatedLobby;
+    
+    setLobbies(updatedLobbies);
+    
+    if (lobbyId === currentLobby?.id) {
+      setCurrentLobby(updatedLobby);
+    }
+    
+    toast.success(`Removed player "${player.name}" from the lobby`);
+  };
+
   return (
     <LobbyContext.Provider
       value={{
@@ -541,7 +634,9 @@ export const LobbyProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         toggleOptionalRole,
         startGame,
         resetGame,
-        refreshLobby
+        refreshLobby,
+        addPlayerLocally,
+        removePlayerLocally
       }}
     >
       {children}
