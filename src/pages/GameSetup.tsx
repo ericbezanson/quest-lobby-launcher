@@ -1,12 +1,12 @@
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import Layout from "@/components/Layout";
 import { useLobby } from "@/contexts/LobbyContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { ArrowLeft, Users, Circle } from "lucide-react";
+import { ArrowLeft, Users, Circle, RefreshCw } from "lucide-react";
 import PlayersList from "@/components/PlayersList";
 import OptionalRolesList from "@/components/OptionalRolesList";
 import GameCards from "@/components/GameCards";
@@ -14,7 +14,8 @@ import GameCards from "@/components/GameCards";
 const GameSetup = () => {
   const { lobbyId } = useParams<{ lobbyId: string }>();
   const navigate = useNavigate();
-  const { getLobby, currentPlayer, resetGame } = useLobby();
+  const { getLobby, currentPlayer, resetGame, refreshLobby } = useLobby();
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
   const lobby = getLobby(lobbyId || "");
   const isHost = currentPlayer?.isHost || false;
@@ -29,12 +30,32 @@ const GameSetup = () => {
     if (!lobby.gameStarted) {
       navigate(`/lobby/${lobbyId}`);
     }
-  }, [lobby, lobbyId, navigate]);
+    
+    // Set up periodic refresh of lobby data
+    const refreshInterval = setInterval(() => {
+      if (lobbyId) {
+        refreshLobby(lobbyId);
+      }
+    }, 10000); // Refresh every 10 seconds
+    
+    return () => clearInterval(refreshInterval);
+  }, [lobby, lobbyId, navigate, refreshLobby]);
 
   const handleResetGame = () => {
     if (!lobbyId) return;
     resetGame(lobbyId);
     navigate(`/lobby/${lobbyId}`);
+  };
+
+  const handleRefresh = () => {
+    if (!lobbyId) return;
+    
+    setIsRefreshing(true);
+    refreshLobby(lobbyId);
+    
+    setTimeout(() => {
+      setIsRefreshing(false);
+    }, 1000);
   };
 
   if (!lobby) {
@@ -58,8 +79,18 @@ const GameSetup = () => {
                   </CardDescription>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Users size={20} className="text-quest-royal-purple" />
-                  <span>{lobby.players.length} players</span>
+                  <span className="flex items-center gap-2">
+                    <Users size={20} className="text-quest-royal-purple" />
+                    {lobby.players.length} players
+                  </span>
+                  <Button
+                    variant="outline"
+                    className="border-quest-gold text-quest-royal-purple p-2"
+                    onClick={handleRefresh}
+                    disabled={isRefreshing}
+                  >
+                    <RefreshCw size={16} className={isRefreshing ? "animate-spin" : ""} />
+                  </Button>
                 </div>
               </div>
             </CardHeader>

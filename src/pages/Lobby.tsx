@@ -1,19 +1,20 @@
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import Layout from "@/components/Layout";
 import { useLobby } from "@/contexts/LobbyContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Play, Users, LogOut } from "lucide-react";
+import { Play, Users, LogOut, RefreshCw } from "lucide-react";
 import PlayersList from "@/components/PlayersList";
 import OptionalRolesList from "@/components/OptionalRolesList";
 
 const Lobby = () => {
   const { lobbyId } = useParams<{ lobbyId: string }>();
   const navigate = useNavigate();
-  const { getLobby, currentPlayer, leaveLobby, startGame } = useLobby();
+  const { getLobby, currentPlayer, leaveLobby, startGame, refreshLobby } = useLobby();
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
   const lobby = getLobby(lobbyId || "");
   const isHost = currentPlayer?.isHost || false;
@@ -28,7 +29,16 @@ const Lobby = () => {
     if (lobby.gameStarted) {
       navigate(`/game-setup/${lobbyId}`);
     }
-  }, [lobby, lobbyId, navigate]);
+    
+    // Set up periodic refresh of lobby data
+    const refreshInterval = setInterval(() => {
+      if (lobbyId) {
+        refreshLobby(lobbyId);
+      }
+    }, 10000); // Refresh every 10 seconds
+    
+    return () => clearInterval(refreshInterval);
+  }, [lobby, lobbyId, navigate, refreshLobby]);
 
   const handleStartGame = () => {
     if (!lobbyId) return;
@@ -46,6 +56,17 @@ const Lobby = () => {
     if (!lobbyId || !currentPlayer) return;
     leaveLobby(lobbyId, currentPlayer.id);
     navigate("/");
+  };
+
+  const handleRefresh = () => {
+    if (!lobbyId) return;
+    
+    setIsRefreshing(true);
+    refreshLobby(lobbyId);
+    
+    setTimeout(() => {
+      setIsRefreshing(false);
+    }, 1000);
   };
 
   if (!lobby) {
@@ -72,13 +93,23 @@ const Lobby = () => {
                     Waiting for players to join
                   </CardDescription>
                 </div>
-                <Button 
-                  variant="outline" 
-                  className="border-quest-gold text-quest-royal-purple"
-                  onClick={copyLobbyId}
-                >
-                  Lobby ID: {lobbyId?.substring(0, 6)}...
-                </Button>
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    className="border-quest-gold text-quest-royal-purple"
+                    onClick={copyLobbyId}
+                  >
+                    Lobby ID: {lobbyId}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="border-quest-gold text-quest-royal-purple p-2"
+                    onClick={handleRefresh}
+                    disabled={isRefreshing}
+                  >
+                    <RefreshCw size={16} className={isRefreshing ? "animate-spin" : ""} />
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent>

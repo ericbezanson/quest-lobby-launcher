@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useState } from "react";
+import React, { createContext, useContext, useState, useEffect } from "react";
 import { toast } from "sonner";
 
 interface Player {
@@ -24,6 +24,7 @@ export interface Lobby {
   optionalRoles: OptionalRole[];
   gameStarted: boolean;
   firstPlayer?: Player;
+  lastUpdated: number;
 }
 
 interface LobbyContextType {
@@ -37,9 +38,34 @@ interface LobbyContextType {
   toggleOptionalRole: (lobbyId: string, roleId: string) => void;
   startGame: (lobbyId: string) => void;
   resetGame: (lobbyId: string) => void;
+  refreshLobby: (lobbyId: string) => void;
 }
 
 const LobbyContext = createContext<LobbyContextType | undefined>(undefined);
+
+// Storage keys
+const LOBBIES_STORAGE_KEY = "questapp_lobbies";
+const CURRENT_LOBBY_ID_KEY = "questapp_current_lobby";
+const CURRENT_PLAYER_ID_KEY = "questapp_current_player";
+
+// Local storage helpers
+const saveToLocalStorage = (key: string, value: any) => {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (error) {
+    console.error("Error saving to localStorage:", error);
+  }
+};
+
+const getFromLocalStorage = (key: string) => {
+  try {
+    const value = localStorage.getItem(key);
+    return value ? JSON.parse(value) : null;
+  } catch (error) {
+    console.error("Error reading from localStorage:", error);
+    return null;
+  }
+};
 
 // Optional roles as per the Quest game rules
 const DEFAULT_OPTIONAL_ROLES: OptionalRole[] = [
@@ -142,9 +168,88 @@ const DEFAULT_OPTIONAL_ROLES: OptionalRole[] = [
 ];
 
 export const LobbyProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [lobbies, setLobbies] = useState<Lobby[]>([]);
+  // Initialize state from localStorage or defaults
+  const [lobbies, setLobbies] = useState<Lobby[]>(() => {
+    const storedLobbies = getFromLocalStorage(LOBBIES_STORAGE_KEY);
+    return Array.isArray(storedLobbies) ? storedLobbies : [];
+  });
+  
   const [currentLobby, setCurrentLobby] = useState<Lobby | null>(null);
   const [currentPlayer, setCurrentPlayer] = useState<Player | null>(null);
+
+  // Load current lobby and player from localStorage on mount
+  useEffect(() => {
+    const loadCurrentSession = () => {
+      const currentLobbyId = getFromLocalStorage(CURRENT_LOBBY_ID_KEY);
+      const currentPlayerId = getFromLocalStorage(CURRENT_PLAYER_ID_KEY);
+      
+      if (currentLobbyId) {
+        const lobby = lobbies.find(l => l.id === currentLobbyId);
+        if (lobby) {
+          setCurrentLobby(lobby);
+          
+          if (currentPlayerId) {
+            const player = lobby.players.find(p => p.id === currentPlayerId);
+            if (player) {
+              setCurrentPlayer(player);
+            }
+          }
+        }
+      }
+    };
+    
+    loadCurrentSession();
+  }, [lobbies]);
+
+  // Save lobbies to localStorage whenever they change
+  useEffect(() => {
+    saveToLocalStorage(LOBBIES_STORAGE_KEY, lobbies);
+  }, [lobbies]);
+
+  // Save current lobby and player IDs to localStorage
+  useEffect(() => {
+    if (currentLobby) {
+      saveToLocalStorage(CURRENT_LOBBY_ID_KEY, currentLobby.id);
+    } else {
+      localStorage.removeItem(CURRENT_LOBBY_ID_KEY);
+    }
+    
+    if (currentPlayer) {
+      saveToLocalStorage(CURRENT_PLAYER_ID_KEY, currentPlayer.id);
+    } else {
+      localStorage.removeItem(CURRENT_PLAYER_ID_KEY);
+    }
+  }, [currentLobby, currentPlayer]);
+
+  // Check for lobby updates periodically (every 5 seconds)
+  useEffect(() => {
+    const checkForLobbyUpdates = () => {
+      if (!currentLobby) return;
+      
+      const storedLobbies = getFromLocalStorage(LOBBIES_STORAGE_KEY);
+      if (!Array.isArray(storedLobbies)) return;
+      
+      const updatedLobby = storedLobbies.find(l => l.id === currentLobby.id);
+      
+      if (updatedLobby && updatedLobby.lastUpdated > (currentLobby.lastUpdated || 0)) {
+        setCurrentLobby(updatedLobby);
+        
+        // Update current player if needed
+        if (currentPlayer) {
+          const updatedPlayer = updatedLobby.players.find(p => p.id === currentPlayer.id);
+          if (updatedPlayer) {
+            setCurrentPlayer(updatedPlayer);
+          } else if (updatedLobby.players.length > 0) {
+            // Player was removed from the lobby
+            setCurrentPlayer(null);
+          }
+        }
+      }
+    };
+    
+    const intervalId = setInterval(checkForLobbyUpdates, 5000);
+    return () => clearInterval(intervalId);
+  }, [currentLobby, currentPlayer]);
 
   // Helper function to generate a simple unique ID
   const generateId = () => Math.random().toString(36).substring(2, 9);
@@ -163,13 +268,14 @@ export const LobbyProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // Create optional roles based on the defaults
     const optionalRoles = JSON.parse(JSON.stringify(DEFAULT_OPTIONAL_ROLES));
     
-    // Create the lobby
+    // Create the lobby with a timestamp
     const newLobby: Lobby = {
       id: lobbyId,
       name,
       players: [host],
       optionalRoles,
-      gameStarted: false
+      gameStarted: false,
+      lastUpdated: Date.now()
     };
     
     setLobbies(prevLobbies => [...prevLobbies, newLobby]);
@@ -208,10 +314,11 @@ export const LobbyProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       isHost: false
     };
     
-    // Add the player to the lobby
+    // Add the player to the lobby and update timestamp
     const updatedLobby = {
       ...lobby,
-      players: [...lobby.players, newPlayer]
+      players: [...lobby.players, newPlayer],
+      lastUpdated: Date.now()
     };
     
     // Update the lobbies state
@@ -228,6 +335,38 @@ export const LobbyProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const getLobby = (lobbyId: string): Lobby | undefined => {
     return lobbies.find(lobby => lobby.id === lobbyId);
+  };
+
+  const refreshLobby = (lobbyId: string): void => {
+    const storedLobbies = getFromLocalStorage(LOBBIES_STORAGE_KEY);
+    if (!Array.isArray(storedLobbies)) return;
+    
+    const updatedLobby = storedLobbies.find(l => l.id === lobbyId);
+    if (updatedLobby) {
+      // Update lobbies state
+      setLobbies(prevLobbies => {
+        const lobbyIndex = prevLobbies.findIndex(l => l.id === lobbyId);
+        if (lobbyIndex !== -1) {
+          const newLobbies = [...prevLobbies];
+          newLobbies[lobbyIndex] = updatedLobby;
+          return newLobbies;
+        }
+        return prevLobbies;
+      });
+      
+      // Update current lobby if it's the one being refreshed
+      if (currentLobby && currentLobby.id === lobbyId) {
+        setCurrentLobby(updatedLobby);
+        
+        // Update current player if needed
+        if (currentPlayer) {
+          const updatedPlayer = updatedLobby.players.find(p => p.id === currentPlayer.id);
+          if (updatedPlayer) {
+            setCurrentPlayer(updatedPlayer);
+          }
+        }
+      }
+    }
   };
 
   const leaveLobby = (lobbyId: string, playerId: string): void => {
@@ -259,7 +398,8 @@ export const LobbyProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       
       updatedLobbies[lobbyIndex] = {
         ...lobby,
-        players: updatedPlayers
+        players: updatedPlayers,
+        lastUpdated: Date.now()
       };
       
       toast.info(`Host left. ${updatedPlayers[0].name} is now the host.`);
@@ -276,7 +416,8 @@ export const LobbyProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       
       updatedLobbies[lobbyIndex] = {
         ...lobby,
-        players: updatedPlayers
+        players: updatedPlayers,
+        lastUpdated: Date.now()
       };
       
       toast.info(`${player.name} left the lobby.`);
@@ -313,7 +454,8 @@ export const LobbyProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     
     const updatedLobby = {
       ...lobby,
-      optionalRoles: updatedOptionalRoles
+      optionalRoles: updatedOptionalRoles,
+      lastUpdated: Date.now()
     };
     
     const updatedLobbies = [...lobbies];
@@ -342,7 +484,8 @@ export const LobbyProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const updatedLobby = {
       ...lobby,
       gameStarted: true,
-      firstPlayer
+      firstPlayer,
+      lastUpdated: Date.now()
     };
     
     const updatedLobbies = [...lobbies];
@@ -369,7 +512,8 @@ export const LobbyProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const updatedLobby = {
       ...lobby,
       gameStarted: false,
-      firstPlayer: undefined
+      firstPlayer: undefined,
+      lastUpdated: Date.now()
     };
     
     const updatedLobbies = [...lobbies];
@@ -396,7 +540,8 @@ export const LobbyProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         leaveLobby,
         toggleOptionalRole,
         startGame,
-        resetGame
+        resetGame,
+        refreshLobby
       }}
     >
       {children}
