@@ -6,7 +6,7 @@ import { componentTagger } from "lovable-tagger";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
-  base: "./docs",  // Set the base URL for GitHub Pages
+  base: "/quest-lobby-launcher/",  // Set the base URL for GitHub Pages
   server: {
     host: "::",
     port: 8080,
